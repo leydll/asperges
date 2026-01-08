@@ -1,0 +1,3 @@
+# Configuration Git pour le projet
+*.sh text eol=lf
+
