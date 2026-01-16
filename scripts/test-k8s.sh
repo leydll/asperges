@@ -54,13 +54,18 @@ kubectl get pods -n todo-app
 echo -e "${GREEN}Statut des services :${NC}"
 kubectl get services -n todo-app
 
-# Obtenir l'URL du frontend
+# Obtenir l'URL de la gateway
 echo ""
-echo -e "${GREEN}Accéder à l'application :${NC}"
-minikube service frontend-service -n todo-app --url
+echo -e "${GREEN}Accéder à l'application via la gateway :${NC}"
+echo "  Option 1 (Port-forward) : kubectl port-forward -n todo-app service/gateway-service 3000:80"
+echo "  Puis ouvrir : http://localhost:3000"
+echo ""
+echo "  Option 2 (minikube service) :"
+minikube service gateway-service -n todo-app --url
 
 echo ""
 echo -e "${YELLOW}Pour voir les logs :${NC}"
+echo "  kubectl logs -l app=gateway -n todo-app"
 echo "  kubectl logs -l app=backend -n todo-app"
 echo "  kubectl logs -l app=frontend -n todo-app"
 echo ""

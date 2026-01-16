@@ -3,16 +3,16 @@ import axios from 'axios';
 import './App.css';
 
 // Configuration de l'URL de l'API
-// En production avec Kubernetes, l'API est accessible via le service backend-service
+// L'API est toujours accessible via la gateway sur /api
+// La gateway route /api vers le backend
 const getApiUrl = () => {
   if (process.env.REACT_APP_API_URL) {
     return process.env.REACT_APP_API_URL;
   }
-  // Si on est dans un environnement Kubernetes, utiliser le service
-  if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-    return '/api';
-  }
-  return 'http://localhost:5001/api';
+  // Utiliser /api comme URL relative - cela fonctionne quand on accède via la gateway
+  // Si on accède via le service frontend directement, cela ne fonctionnera pas
+  // Solution : toujours accéder via la gateway-service
+  return '/api';
 };
 
 const API_URL = getApiUrl();
@@ -31,12 +31,21 @@ function App() {
   const fetchTodos = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API_URL}/todos`);
+      const url = `${API_URL}/todos`;
+      console.log('Fetching todos from:', url);
+      const response = await axios.get(url);
+      console.log('Todos response:', response.data);
       setTodos(response.data);
       setError(null);
     } catch (err) {
+      console.error('Error fetching todos:', err);
+      console.error('Error details:', {
+        message: err.message,
+        code: err.code,
+        config: err.config,
+        response: err.response
+      });
       setError('Erreur lors du chargement des tâches');
-      console.error(err);
     } finally {
       setLoading(false);
     }

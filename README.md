@@ -4,10 +4,40 @@ Application de gestion de tâches (Todo App) déployée avec Docker et Kubernete
 
 ## Architecture
 
-L'application est composée des services suivants :
+L'application suit une architecture microservices avec une **gateway** comme point d'entrée unique :
 
-- **Frontend** : Interface utilisateur React
-- **Backend API** : API REST en Python Flask
+```
+┌─────────────────────────────────────────┐
+│         Gateway (Nginx)                 │
+│      Point d'entrée unique              │
+│         Port 3000 (80)                  │
+└──────────────┬──────────────────────────┘
+               │
+       ┌───────┴────────┐
+       │                │
+       ▼                ▼
+┌─────────────┐  ┌──────────────┐
+│  Frontend   │  │   Backend    │
+│   (React)   │  │   (Flask)    │
+│             │  │              │
+└─────────────┘  └──────┬───────┘
+                        │
+                ┌───────┴────────┐
+                │                │
+                ▼                ▼
+         ┌──────────┐    ┌──────────┐
+         │  MySQL   │    │  Redis   │
+         │          │    │  (Cache)  │
+         └──────────┘    └──────────┘
+```
+
+### Services
+
+- **Gateway** : Point d'entrée unique (Nginx reverse proxy)
+  - Route `/` → Frontend
+  - Route `/api` → Backend(s)
+- **Frontend** : Interface utilisateur React (accessible via la gateway)
+- **Backend API** : API REST en Python Flask (accessible via la gateway sur `/api`)
 - **Base de données** : MySQL
 - **Cache** : Redis (optionnel)
 
@@ -39,7 +69,7 @@ Des scripts d'automatisation sont fournis pour faciliter le déploiement et la g
 
 ### Scripts disponibles
 
-- **`scripts/build-images.sh`** : Construit les images Docker (backend et frontend)
+- **`scripts/build-images.sh`** : Construit les images Docker (gateway, backend et frontend)
 - **`scripts/deploy-k8s.sh`** : Déploie l'application complète sur Kubernetes
 - **`scripts/cleanup-k8s.sh`** : Nettoie toutes les ressources Kubernetes
 - **`scripts/test-k8s.sh`** : Test complet avec minikube (démarre minikube si nécessaire)
@@ -76,9 +106,10 @@ docker-compose logs -f
 docker-compose down
 ```
 
-L'application sera accessible sur :
-- Frontend : http://localhost:3000
-- Backend API : http://localhost:5001 (port mappé depuis 5000 dans le conteneur)
+L'application sera accessible via la **gateway** (point d'entrée unique) :
+- **Application complète** : http://localhost:3000
+  - Frontend : http://localhost:3000/
+  - Backend API : http://localhost:3000/api
 
 ## Déploiement avec Kubernetes
 
@@ -100,10 +131,12 @@ kubectl get nodes
 
 ```bash
 # Construire les images
+docker build -t todo-gateway:latest ./gateway
 docker build -t todo-frontend:latest ./frontend
 docker build -t todo-backend:latest ./backend
 
 # Pour minikube, charger les images
+minikube image load todo-gateway:latest
 minikube image load todo-frontend:latest
 minikube image load todo-backend:latest
 
@@ -148,6 +181,13 @@ kubectl wait --for=condition=ready pod -l app=backend -n todo-app --timeout=120s
 kubectl apply -f kubernetes/frontend/deployment.yaml
 kubectl apply -f kubernetes/frontend/service.yaml
 
+# Attendre que le frontend soit prêt
+kubectl wait --for=condition=ready pod -l app=frontend -n todo-app --timeout=120s
+
+# Déployer la gateway (point d'entrée unique)
+kubectl apply -f kubernetes/gateway/deployment.yaml
+kubectl apply -f kubernetes/gateway/service.yaml
+
 # Vérifier le déploiement
 kubectl get all -n todo-app
 
@@ -166,15 +206,14 @@ chmod +x scripts/deploy-k8s.sh
 ### Accéder à l'application
 
 ```bash
-# Avec minikube
-minikube service frontend-service -n todo-app
+# Avec minikube (via la gateway)
+minikube service gateway-service -n todo-app
 
 # Ou obtenir l'URL directement
-minikube service frontend-service -n todo-app --url
+minikube service gateway-service -n todo-app --url
 
 # Port-forward (alternative)
-kubectl port-forward -n todo-app service/frontend-service 3000:80
-kubectl port-forward -n todo-app service/backend-service 5000:5000
+kubectl port-forward -n todo-app service/gateway-service 3000:80
 ```
 
 L'application sera accessible sur l'URL fournie par minikube.
@@ -223,6 +262,10 @@ kubectl delete namespace todo-app
 
 ```
 .
+├── gateway/              # Gateway (Point d'entrée unique)
+│   ├── nginx.conf        # Configuration pour Docker Compose
+│   ├── nginx-k8s.conf    # Configuration pour Kubernetes
+│   └── Dockerfile
 ├── backend/              # Service API Flask
 │   ├── app.py
 │   ├── requirements.txt
@@ -238,6 +281,9 @@ kubectl delete namespace todo-app
 ├── kubernetes/           # Manifests Kubernetes
 │   ├── namespace.yaml
 │   ├── secrets.yaml
+│   ├── gateway/
+│   │   ├── deployment.yaml
+│   │   └── service.yaml
 │   ├── backend/
 │   │   ├── deployment.yaml
 │   │   └── service.yaml
@@ -272,6 +318,7 @@ kubectl delete namespace todo-app
 - Affichage de la date de création des tâches
 
 ### Fonctionnalités techniques
+- **Gateway** : Point d'entrée unique (Nginx reverse proxy) pour router les requêtes
 - API REST complète avec Flask
 - Persistance des données avec MySQL
 - Cache avec Redis pour améliorer les performances
@@ -285,6 +332,7 @@ kubectl delete namespace todo-app
 
 ## Technologies utilisées
 
+- **Gateway** : Nginx (reverse proxy)
 - **Frontend** : React, HTML5, CSS3
 - **Backend** : Python 3.11, Flask, SQLAlchemy
 - **Base de données** : MySQL 8.0
@@ -353,8 +401,8 @@ kubectl logs -l app=frontend -n todo-app --tail=50
 kubectl port-forward -n todo-app service/backend-service 5000:5000
 curl http://localhost:5000/api/health
 
-# Accéder au frontend
-minikube service frontend-service -n todo-app
+# Accéder à l'application via la gateway
+minikube service gateway-service -n todo-app
 
 # Vérifier les événements
 kubectl get events -n todo-app --sort-by='.lastTimestamp'

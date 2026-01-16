@@ -56,6 +56,14 @@ kubectl apply -f kubernetes/frontend/deployment.yaml
 kubectl apply -f kubernetes/frontend/service.yaml
 
 echo -e "${YELLOW}Attente que le frontend soit prêt...${NC}"
+kubectl wait --for=condition=ready pod -l app=frontend -n todo-app --timeout=120s || true
+
+echo -e "${BLUE}Déploiement de la gateway...${NC}"
+kubectl apply -f kubernetes/gateway/deployment.yaml
+kubectl apply -f kubernetes/gateway/service.yaml
+
+echo -e "${YELLOW}Attente que la gateway soit prête...${NC}"
+kubectl wait --for=condition=ready pod -l app=gateway -n todo-app --timeout=120s || true
 sleep 10
 
 echo -e "${GREEN}Déploiement terminé !${NC}"
@@ -64,11 +72,14 @@ echo -e "${BLUE}Statut des services :${NC}"
 kubectl get all -n todo-app
 
 echo ""
-echo -e "${GREEN}Pour accéder à l'application :${NC}"
+echo -e "${GREEN}Pour accéder à l'application (via la gateway) :${NC}"
 if command -v minikube &> /dev/null; then
-    echo "  minikube service frontend-service -n todo-app"
+    echo "  minikube service gateway-service -n todo-app"
 else
-    echo "  kubectl port-forward -n todo-app service/frontend-service 3000:80"
+    echo "  kubectl port-forward -n todo-app service/gateway-service 3000:80"
 fi
+echo ""
+echo -e "${YELLOW}Architecture :${NC}"
+echo "  Gateway (point d'entrée) -> Frontend (/) et Backend (/api)"
 echo ""
 

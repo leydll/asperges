@@ -50,8 +50,7 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       PORT: 5000
-    ports:
-      - "5001:5000"
+    # Pas de port exposé directement - accessible via la gateway
     depends_on:
       mysql:
         condition: service_healthy
@@ -72,11 +71,31 @@ services:
       dockerfile: Dockerfile
     container_name: todo-frontend
     environment:
-      REACT_APP_API_URL: http://localhost:5001/api
+      REACT_APP_API_URL: /api
+    # Pas de port exposé directement - accessible via la gateway
+    # Pas de dépendance sur la gateway pour éviter le cycle
+    networks:
+      - todo-network
+
+  # Gateway (Point d'entrée unique)
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: todo-gateway
     ports:
       - "3000:80"
     depends_on:
-      - backend
+      frontend:
+        condition: service_started
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     networks:
       - todo-network
 
